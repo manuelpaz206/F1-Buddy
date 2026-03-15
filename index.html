@@ -9,6 +9,9 @@
 <meta name="apple-mobile-web-app-title" content="F1 Dashboard">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0f0f0f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" type="image/png" href="icon.png">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
   :root {
@@ -20,6 +23,13 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; display: flex; flex-direction: column; align-items: center; -webkit-font-smoothing: antialiased; }
   .app { width: 100%; max-width: 480px; min-height: 100vh; display: flex; flex-direction: column; padding: 0 0 40px; padding-bottom: max(40px, env(safe-area-inset-bottom)); }
+
+  /* NEXT RACE BANNER */
+  .next-race-banner { position: sticky; top: 0; z-index: 100; background: var(--accent); display: none; padding: 10px 20px; align-items: center; justify-content: space-between; gap: 10px; }
+  .next-race-banner.visible { display: flex; }
+  .next-race-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.15em; color: rgba(255,255,255,0.65); text-transform: uppercase; flex-shrink: 0; }
+  .next-race-name { font-family: var(--mono); font-size: 12px; font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .next-race-time { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.8); flex-shrink: 0; }
 
   .header { padding: 52px 24px 20px; border-bottom: 1px solid var(--border); }
   .header-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em; color: var(--accent); text-transform: uppercase; margin-bottom: 8px; }
@@ -96,18 +106,11 @@
   .standings-pts .lbl { font-size: 9px; color: var(--muted); font-weight: 400; }
 
   .footer { padding: 28px 24px 0; font-family: var(--mono); font-size: 10px; color: #333; text-align: center; }
-
-  /* NEXT RACE BANNER */
-  .next-race-banner { position: sticky; top: 0; z-index: 100; background: var(--accent); display: none; padding: 10px 20px; align-items: center; justify-content: space-between; gap: 10px; }
-  .next-race-banner.visible { display: flex; }
-  .next-race-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.15em; color: rgba(255,255,255,0.65); text-transform: uppercase; flex-shrink: 0; }
-  .next-race-name { font-family: var(--mono); font-size: 12px; font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .next-race-time { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.8); flex-shrink: 0; }
 </style>
 </head>
 <body>
 <div class="app">
-  <!-- NEXT RACE STICKY BANNER -->
+
   <div class="next-race-banner" id="nextRaceBanner">
     <div class="next-race-label">Next Race</div>
     <div class="next-race-name" id="nextRaceName">—</div>
@@ -130,7 +133,7 @@
   </div>
 
   <div class="refresh-area">
-    <button class="refresh-btn" id="refreshBtn">↻ &nbsp;UPDATE F1 DATA</button>
+    <button class="refresh-btn" id="refreshBtn">↻  UPDATE F1 DATA</button>
   </div>
 
   <div class="progress-area" id="progressArea">
@@ -143,9 +146,7 @@
   <div class="error-msg" id="errorMsg"></div>
 
   <div class="section" id="sec-stories" style="display:none">
-    <div class="section-header">
-      <div class="section-label">Top Stories</div>
-    </div>
+    <div class="section-header"><div class="section-label">Top Stories</div></div>
     <div id="stories-content"></div>
   </div>
 
@@ -168,13 +169,12 @@
     <div id="standings-content"></div>
   </div>
 
-  <div class="footer">f1 dashboard · haiku · 6hr cache</div>
+  <div class="footer">f1 dashboard · powered by claude</div>
 </div>
 
 <script>
-const CACHE_TTL = 6 * 60 * 60 * 1000;
-const CACHE_TTL_RACE = 1 * 60 * 60 * 1000;
-const MODEL = 'claude-haiku-4-5-20251001';
+const CACHE_TTL        = 6 * 60 * 60 * 1000; // 6 hours
+const CACHE_TTL_RACE   = 1 * 60 * 60 * 1000; // 1 hour for next race
 
 const TEAM_COLORS = {
   'red bull':'#3671C6','ferrari':'#E8002D','mercedes':'#27F4D2',
@@ -193,6 +193,7 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 let activeTab = 'drivers';
 let cachedStandings = null;
 
+// ── KEY ────────────────────────────────────────────────────────────────────────
 function saveKey() {
   const v = document.getElementById('keyInput').value.trim();
   if (!v) return;
@@ -202,6 +203,7 @@ function saveKey() {
   setTimeout(() => document.getElementById('setupPanel').style.display = 'none', 800);
 }
 
+// ── CACHE ──────────────────────────────────────────────────────────────────────
 function cacheGet(key, ttl) {
   try {
     const raw = localStorage.getItem('f1_' + key);
@@ -215,14 +217,14 @@ function cacheSet(key, data) {
   try { localStorage.setItem('f1_' + key, JSON.stringify({ts: Date.now(), data})); } catch {}
 }
 
+// ── DOT ────────────────────────────────────────────────────────────────────────
 function dot(id, state) {
   const el = document.getElementById('dot-' + id);
   if (el) el.className = 'progress-dot ' + state;
 }
 
-async function callHaiku(apiKey, prompt, maxTokens, prefill) {
-  const messages = [{role: 'user', content: prompt}];
-  if (prefill) messages.push({role: 'assistant', content: prefill});
+// ── API ────────────────────────────────────────────────────────────────────────
+async function callClaude(apiKey, model, prompt, maxTokens) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -232,42 +234,39 @@ async function callHaiku(apiKey, prompt, maxTokens, prefill) {
       'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: MODEL,
-      max_tokens: maxTokens || 600,
-      system: 'You are a data assistant. You ALWAYS respond with raw JSON only — no prose, no markdown, no code fences, no explanation. Just the JSON object or array.',
+      model,
+      max_tokens: maxTokens,
+      system: 'You are a data assistant. Always respond with raw JSON only — no prose, no markdown, no code fences, no explanation before or after. Just the JSON.',
       tools: [{type: 'web_search_20250305', name: 'web_search'}],
-      messages
+      messages: [{role: 'user', content: prompt}]
     })
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error?.message || `API ${res.status}`);
-  const text = data.content?.filter(b => b.type==='text').map(b => b.text).join('');
-  console.log('RAW RESPONSE:', text);
-  if (!text) throw new Error('No response text');
-  const fullText = prefill ? prefill + text : text;
-  const stripped = fullText.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
-  const m = stripped.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+  const text = data.content?.filter(b => b.type === 'text').map(b => b.text).join('');
+  if (!text) throw new Error('Empty response');
+  const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  const m = clean.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
   if (!m) throw new Error('No JSON in response');
-  try {
-    return JSON.parse(m[0]);
-  } catch(e) {
-    throw new Error('Invalid JSON: ' + e.message);
-  }
+  return JSON.parse(m[0]);
 }
 
-const P_STORIES = `Search web for the 3 biggest F1 news stories this past week. Reply with a JSON array only:
-[{"headline":"...","body":"..."},{"headline":"...","body":"..."},{"headline":"...","body":"..."}]`;
+// ── PROMPTS ────────────────────────────────────────────────────────────────────
+const today = new Date().toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'});
 
-const P_QUALI = `Search web for the most recent F1 qualifying results. Reply with a JSON object only:
-{"event":"GP Name","date":"Mon DD YYYY","results":[{"pos":1,"driver":"Name","team":"Team","time":"1:26.720","gap":""},{"pos":2,"driver":"Name","team":"Team","time":"1:26.954","gap":"+0.234"}]}
-Include all top 10 finishers. Keep driver names as firstname lastname, keep team names short.`;
+const P_NEXTRACE = `Today is ${today}. Search for the 2025 F1 race calendar. Return the next race that has not yet happened (strictly after today). JSON only:
+{"name":"GP Name","date":"Mon DD YYYY","time_et":"H:MM AM ET"}`;
 
-const P_STANDINGS = `Search web for current 2025 F1 standings. Reply with a JSON object only:
-{"drivers":[{"pos":1,"name":"Name","team":"Team","points":77}],"constructors":[{"pos":1,"name":"Team","points":134}]}
-Include top 10 in each array.`;
+const P_STORIES = `Search for the 3 biggest F1 news stories from the past 7 days. JSON array only:
+[{"headline":"...","body":"1-2 sentence summary"},{"headline":"...","body":"..."},{"headline":"...","body":"..."}]`;
 
-const P_NEXTRACE = `Today is ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}. Search the web for "2025 F1 race calendar" and find the next race that has not yet happened. Reply with ONLY a JSON object, nothing else: {"name":"...","date":"...","time_et":"..."}`;
+const P_QUALI = `Search for the most recent Formula 1 qualifying session results. Return all top 10 positions. JSON only:
+{"event":"GP Name","date":"Mon DD YYYY","results":[{"pos":1,"driver":"Firstname Lastname","team":"Team Name","time":"1:26.720","gap":""},{"pos":2,"driver":"...","team":"...","time":"...","gap":"+0.234"},{"pos":3,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":4,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":5,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":6,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":7,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":8,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":9,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":10,"driver":"...","team":"...","time":"...","gap":"..."}]}`;
 
+const P_STANDINGS = `Search for the current 2025 F1 championship standings. Return top 10 drivers and top 10 constructors. JSON only:
+{"drivers":[{"pos":1,"name":"...","team":"...","points":0},{"pos":2,"name":"...","team":"...","points":0},{"pos":3,"name":"...","team":"...","points":0},{"pos":4,"name":"...","team":"...","points":0},{"pos":5,"name":"...","team":"...","points":0},{"pos":6,"name":"...","team":"...","points":0},{"pos":7,"name":"...","team":"...","points":0},{"pos":8,"name":"...","team":"...","points":0},{"pos":9,"name":"...","team":"...","points":0},{"pos":10,"name":"...","team":"...","points":0}],"constructors":[{"pos":1,"name":"...","points":0},{"pos":2,"name":"...","points":0},{"pos":3,"name":"...","points":0},{"pos":4,"name":"...","points":0},{"pos":5,"name":"...","points":0},{"pos":6,"name":"...","points":0},{"pos":7,"name":"...","points":0},{"pos":8,"name":"...","points":0},{"pos":9,"name":"...","points":0},{"pos":10,"name":"...","points":0}]}`;
+
+// ── RENDER ─────────────────────────────────────────────────────────────────────
 function renderNextRace(d) {
   document.getElementById('nextRaceName').textContent = d.name || '—';
   document.getElementById('nextRaceTime').textContent = d.time_et ? d.date + ' · ' + d.time_et : d.date || '';
@@ -275,7 +274,7 @@ function renderNextRace(d) {
 }
 
 function renderStories(s) {
-  document.getElementById('stories-content').innerHTML = s.map((x,i) =>
+  document.getElementById('stories-content').innerHTML = s.map((x, i) =>
     `<div class="story-card">
       <div class="story-num">STORY ${i+1} OF ${s.length}</div>
       <div class="story-headline">${esc(x.headline)}</div>
@@ -352,20 +351,24 @@ function showTab(tab) {
 
 function showError(m) { const e=document.getElementById('errorMsg'); e.textContent=m; e.className='error-msg visible'; }
 function hideError() { document.getElementById('errorMsg').className='error-msg'; }
-
 function setTs(ts) {
   const el = document.getElementById('lastUpdated');
   el.textContent = 'updated ' + ts;
   el.className = 'last-updated live';
 }
 
+// ── REFRESH ────────────────────────────────────────────────────────────────────
 async function refresh() {
   const apiKey = localStorage.getItem('claudeKey');
   if (!apiKey) { document.getElementById('setupPanel').style.display='block'; showError('Add your API key first.'); return; }
   hideError();
 
-  // Serve fully from cache if all 4 fresh
-  const cN = cacheGet('nextrace', CACHE_TTL_RACE), cS = cacheGet('stories'), cQ = cacheGet('quali'), cSt = cacheGet('standings');
+  const cN  = cacheGet('nextrace', CACHE_TTL_RACE);
+  const cS  = cacheGet('stories');
+  const cQ  = cacheGet('quali');
+  const cSt = cacheGet('standings');
+
+  // All cached — instant render
   if (cN && cS && cQ && cSt) {
     renderNextRace(cN); renderStories(cS); renderQuali(cQ); renderStandings(cSt);
     const ts = localStorage.getItem('f1Ts');
@@ -376,26 +379,30 @@ async function refresh() {
   document.getElementById('refreshBtn').disabled = true;
   document.getElementById('progressArea').className = 'progress-area visible';
   if (!cN) dot('nextrace','loading'); else { dot('nextrace','done'); renderNextRace(cN); }
-  if (!cS) dot('stories','loading'); else { dot('stories','done'); renderStories(cS); }
-  if (!cQ) dot('quali','loading');   else { dot('quali','done');   renderQuali(cQ); }
+  if (!cS) dot('stories','loading');  else { dot('stories','done');  renderStories(cS); }
+  if (!cQ) dot('quali','loading');    else { dot('quali','done');    renderQuali(cQ); }
   if (!cSt) dot('standings','loading'); else { dot('standings','done'); renderStandings(cSt); }
 
+  // Haiku for small calls, Sonnet for quali (structured, longer output)
+  const HAIKU  = 'claude-haiku-4-5-20251001';
+  const SONNET = 'claude-sonnet-4-20250514';
+
   const results = await Promise.allSettled([
-    cN ? Promise.resolve(cN) : callHaiku(apiKey, P_NEXTRACE, 200, '{').then(d => { cacheSet('nextrace',d); dot('nextrace','done'); renderNextRace(d); return d; }),
-    cS ? Promise.resolve(cS) : callHaiku(apiKey, P_STORIES, 400).then(d => { cacheSet('stories',d); dot('stories','done'); renderStories(d); return d; }),
-    cQ ? Promise.resolve(cQ) : callHaiku(apiKey, P_QUALI, 1000).then(d => { cacheSet('quali',d);   dot('quali','done');   renderQuali(d);   return d; }),
-    cSt ? Promise.resolve(cSt) : callHaiku(apiKey, P_STANDINGS, 600).then(d => { cacheSet('standings',d); dot('standings','done'); renderStandings(d); return d; }),
+    cN  ? Promise.resolve(cN)  : callClaude(apiKey, HAIKU,  P_NEXTRACE,  256).then(d => { cacheSet('nextrace',d);  dot('nextrace','done');  renderNextRace(d);  return d; }),
+    cS  ? Promise.resolve(cS)  : callClaude(apiKey, HAIKU,  P_STORIES,   500).then(d => { cacheSet('stories',d);   dot('stories','done');   renderStories(d);   return d; }),
+    cQ  ? Promise.resolve(cQ)  : callClaude(apiKey, SONNET, P_QUALI,    1500).then(d => { cacheSet('quali',d);     dot('quali','done');     renderQuali(d);     return d; }),
+    cSt ? Promise.resolve(cSt) : callClaude(apiKey, HAIKU,  P_STANDINGS, 800).then(d => { cacheSet('standings',d); dot('standings','done'); renderStandings(d); return d; }),
   ]);
 
   results.forEach((r,i) => { if (r.status==='rejected') dot(['nextrace','stories','quali','standings'][i],'err'); });
 
-  const failed = results.filter(r=>r.status==='rejected');
+  const failed = results.filter(r => r.status==='rejected');
   if (failed.length) {
-    const msg = failed.map(r=>r.reason?.message).join(' · ');
     const labels = ['nextrace','stories','quali','standings'];
-    const failedNames = results.map((r,i)=>r.status==='rejected'?labels[i]:null).filter(Boolean);
+    const names  = results.map((r,i) => r.status==='rejected' ? labels[i] : null).filter(Boolean);
+    const msg    = failed.map(r => r.reason?.message).join(' · ');
     if (msg.includes('401')) document.getElementById('setupPanel').style.display='block';
-    showError(`Failed (${failedNames.join(', ')}): ${msg}`);
+    showError(`Failed (${names.join(', ')}): ${msg}`);
   }
 
   const ts = new Date().toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -405,20 +412,20 @@ async function refresh() {
   setTimeout(() => { document.getElementById('progressArea').className = 'progress-area'; }, 2000);
 }
 
-// ── INIT ──────────────────────────────────────────────────────────────────────
+// ── INIT ───────────────────────────────────────────────────────────────────────
 document.getElementById('keySaveBtn').addEventListener('click', saveKey);
-document.getElementById('keyInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') saveKey(); });
+document.getElementById('keyInput').addEventListener('keydown', e => { if (e.key==='Enter') saveKey(); });
 document.getElementById('refreshBtn').addEventListener('click', refresh);
-document.getElementById('btnDrivers').addEventListener('click', function() { showTab('drivers'); });
-document.getElementById('btnConstructors').addEventListener('click', function() { showTab('constructors'); });
+document.getElementById('btnDrivers').addEventListener('click', () => showTab('drivers'));
+document.getElementById('btnConstructors').addEventListener('click', () => showTab('constructors'));
 
 if (localStorage.getItem('claudeKey')) document.getElementById('setupPanel').style.display = 'none';
-const cN = cacheGet('nextrace', CACHE_TTL_RACE), cS = cacheGet('stories'), cQ = cacheGet('quali'), cSt = cacheGet('standings');
-if (cN) renderNextRace(cN);
-if (cS) renderStories(cS);
-if (cQ) renderQuali(cQ);
-if (cSt) renderStandings(cSt);
-if (cN||cS||cQ||cSt) { const ts=localStorage.getItem('f1Ts'); if(ts) setTs(ts+' (cached)'); }
+const _cN = cacheGet('nextrace', CACHE_TTL_RACE), _cS = cacheGet('stories'), _cQ = cacheGet('quali'), _cSt = cacheGet('standings');
+if (_cN) renderNextRace(_cN);
+if (_cS) renderStories(_cS);
+if (_cQ) renderQuali(_cQ);
+if (_cSt) renderStandings(_cSt);
+if (_cN||_cS||_cQ||_cSt) { const ts=localStorage.getItem('f1Ts'); if(ts) setTs(ts+' (cached)'); }
 </script>
 </body>
 </html>

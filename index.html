@@ -96,10 +96,24 @@
   .standings-pts .lbl { font-size: 9px; color: var(--muted); font-weight: 400; }
 
   .footer { padding: 28px 24px 0; font-family: var(--mono); font-size: 10px; color: #333; text-align: center; }
+
+  /* NEXT RACE BANNER */
+  .next-race-banner { position: sticky; top: 0; z-index: 100; background: var(--accent); display: none; padding: 10px 20px; align-items: center; justify-content: space-between; gap: 10px; }
+  .next-race-banner.visible { display: flex; }
+  .next-race-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.15em; color: rgba(255,255,255,0.65); text-transform: uppercase; flex-shrink: 0; }
+  .next-race-name { font-family: var(--mono); font-size: 12px; font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .next-race-time { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.8); flex-shrink: 0; }
 </style>
 </head>
 <body>
 <div class="app">
+  <!-- NEXT RACE STICKY BANNER -->
+  <div class="next-race-banner" id="nextRaceBanner">
+    <div class="next-race-label">Next Race</div>
+    <div class="next-race-name" id="nextRaceName">—</div>
+    <div class="next-race-time" id="nextRaceTime"></div>
+  </div>
+
   <div class="header">
     <div class="header-label">Manuel's System</div>
     <div class="header-title">Formula 1<br><strong>at a glance.</strong></div>
@@ -120,6 +134,7 @@
   </div>
 
   <div class="progress-area" id="progressArea">
+    <div class="progress-row"><div class="progress-dot" id="dot-nextrace"></div><div class="progress-label">NEXT RACE</div></div>
     <div class="progress-row"><div class="progress-dot" id="dot-stories"></div><div class="progress-label">TOP STORIES</div></div>
     <div class="progress-row"><div class="progress-dot" id="dot-quali"></div><div class="progress-label">QUALIFYING RESULTS</div></div>
     <div class="progress-row"><div class="progress-dot" id="dot-standings"></div><div class="progress-label">STANDINGS</div></div>
@@ -237,7 +252,15 @@ const P_QUALI = `Search web for the most recent F1 qualifying session results. R
 const P_STANDINGS = `Search web for current 2025 F1 championship standings. Respond with ONLY a raw JSON object, no markdown:
 {"drivers":[{"pos":1,"name":"Full Name","team":"Team","points":77},{"pos":2,"name":"...","team":"...","points":64},{"pos":3,"name":"...","team":"...","points":58},{"pos":4,"name":"...","team":"...","points":50},{"pos":5,"name":"...","team":"...","points":45},{"pos":6,"name":"...","team":"...","points":38},{"pos":7,"name":"...","team":"...","points":30},{"pos":8,"name":"...","team":"...","points":24},{"pos":9,"name":"...","team":"...","points":18},{"pos":10,"name":"...","team":"...","points":12}],"constructors":[{"pos":1,"name":"Team","points":134},{"pos":2,"name":"...","points":112},{"pos":3,"name":"...","points":98},{"pos":4,"name":"...","points":80},{"pos":5,"name":"...","points":65},{"pos":6,"name":"...","points":50},{"pos":7,"name":"...","points":35},{"pos":8,"name":"...","points":22},{"pos":9,"name":"...","points":12},{"pos":10,"name":"...","points":5}]}`;
 
-function renderStories(s) {
+const P_NEXTRACE = `Search web for the next upcoming Formula 1 race in the 2025 season. Respond with ONLY a raw JSON object, no markdown:
+{"name":"Chinese Grand Prix","circuit":"Shanghai International Circuit","date":"Mar 23, 2025","time_et":"3:00 AM ET"}`;
+
+function renderNextRace(d) {
+  document.getElementById('nextRaceName').textContent = d.name || '—';
+  document.getElementById('nextRaceTime').textContent = d.time_et ? d.date + ' · ' + d.time_et : d.date || '';
+  document.getElementById('nextRaceBanner').className = 'next-race-banner visible';
+}
+
   document.getElementById('stories-content').innerHTML = s.map((x,i) =>
     `<div class="story-card">
       <div class="story-num">STORY ${i+1} OF ${s.length}</div>
@@ -327,10 +350,10 @@ async function refresh() {
   if (!apiKey) { document.getElementById('setupPanel').style.display='block'; showError('Add your API key first.'); return; }
   hideError();
 
-  // Serve fully from cache if all 3 fresh
-  const cS = cacheGet('stories'), cQ = cacheGet('quali'), cSt = cacheGet('standings');
-  if (cS && cQ && cSt) {
-    renderStories(cS); renderQuali(cQ); renderStandings(cSt);
+  // Serve fully from cache if all 4 fresh
+  const cN = cacheGet('nextrace'), cS = cacheGet('stories'), cQ = cacheGet('quali'), cSt = cacheGet('standings');
+  if (cN && cS && cQ && cSt) {
+    renderNextRace(cN); renderStories(cS); renderQuali(cQ); renderStandings(cSt);
     const ts = localStorage.getItem('f1Ts');
     if (ts) setTs(ts + ' (cached)');
     return;
@@ -338,17 +361,19 @@ async function refresh() {
 
   document.getElementById('refreshBtn').disabled = true;
   document.getElementById('progressArea').className = 'progress-area visible';
+  if (!cN) dot('nextrace','loading'); else { dot('nextrace','done'); renderNextRace(cN); }
   if (!cS) dot('stories','loading'); else { dot('stories','done'); renderStories(cS); }
   if (!cQ) dot('quali','loading');   else { dot('quali','done');   renderQuali(cQ); }
   if (!cSt) dot('standings','loading'); else { dot('standings','done'); renderStandings(cSt); }
 
   const results = await Promise.allSettled([
+    cN ? Promise.resolve(cN) : callHaiku(apiKey, P_NEXTRACE).then(d => { cacheSet('nextrace',d); dot('nextrace','done'); renderNextRace(d); return d; }),
     cS ? Promise.resolve(cS) : callHaiku(apiKey, P_STORIES).then(d => { cacheSet('stories',d); dot('stories','done'); renderStories(d); return d; }),
     cQ ? Promise.resolve(cQ) : callHaiku(apiKey, P_QUALI).then(d => { cacheSet('quali',d);   dot('quali','done');   renderQuali(d);   return d; }),
     cSt ? Promise.resolve(cSt) : callHaiku(apiKey, P_STANDINGS).then(d => { cacheSet('standings',d); dot('standings','done'); renderStandings(d); return d; }),
   ]);
 
-  results.forEach((r,i) => { if (r.status==='rejected') dot(['stories','quali','standings'][i],'err'); });
+  results.forEach((r,i) => { if (r.status==='rejected') dot(['nextrace','stories','quali','standings'][i],'err'); });
 
   const failed = results.filter(r=>r.status==='rejected');
   if (failed.length) {
@@ -367,11 +392,12 @@ async function refresh() {
 // Init — load key, render cache
 (function init() {
   if (localStorage.getItem('claudeKey')) document.getElementById('setupPanel').style.display = 'none';
-  const cS = cacheGet('stories'), cQ = cacheGet('quali'), cSt = cacheGet('standings');
+  const cN = cacheGet('nextrace'), cS = cacheGet('stories'), cQ = cacheGet('quali'), cSt = cacheGet('standings');
+  if (cN) renderNextRace(cN);
   if (cS) renderStories(cS);
   if (cQ) renderQuali(cQ);
   if (cSt) renderStandings(cSt);
-  if (cS||cQ||cSt) { const ts=localStorage.getItem('f1Ts'); if(ts) setTs(ts+' (cached)'); }
+  if (cN||cS||cQ||cSt) { const ts=localStorage.getItem('f1Ts'); if(ts) setTs(ts+' (cached)'); }
 })();
 </script>
 </body>

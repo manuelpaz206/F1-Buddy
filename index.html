@@ -124,13 +124,13 @@
     <div class="setup-label">API Key (one-time setup)</div>
     <div class="setup-row">
       <input type="password" class="key-input" id="keyInput" placeholder="sk-ant-api03-..." />
-      <button class="key-save" onclick="saveKey()">Save</button>
+      <button class="key-save" id="keySaveBtn">Save</button>
     </div>
     <div class="key-saved" id="keySaved" style="display:none">✓ Key saved locally</div>
   </div>
 
   <div class="refresh-area">
-    <button class="refresh-btn" id="refreshBtn" onclick="refresh()">↻ &nbsp;UPDATE F1 DATA</button>
+    <button class="refresh-btn" id="refreshBtn">↻ &nbsp;UPDATE F1 DATA</button>
   </div>
 
   <div class="progress-area" id="progressArea">
@@ -161,8 +161,8 @@
     <div class="section-header">
       <div class="section-label">Standings</div>
       <div class="standings-toggle">
-        <button class="toggle-btn active" id="btnDrivers" onclick="showTab('drivers')">DRIVERS</button>
-        <button class="toggle-btn" id="btnConstructors" onclick="showTab('constructors')">CONSTRUCTORS</button>
+        <button class="toggle-btn active" id="btnDrivers">DRIVERS</button>
+        <button class="toggle-btn" id="btnConstructors">CONSTRUCTORS</button>
       </div>
     </div>
     <div id="standings-content"></div>
@@ -261,6 +261,7 @@ function renderNextRace(d) {
   document.getElementById('nextRaceBanner').className = 'next-race-banner visible';
 }
 
+function renderStories(s) {
   document.getElementById('stories-content').innerHTML = s.map((x,i) =>
     `<div class="story-card">
       <div class="story-num">STORY ${i+1} OF ${s.length}</div>
@@ -389,16 +390,20 @@ async function refresh() {
   setTimeout(() => { document.getElementById('progressArea').className = 'progress-area'; }, 2000);
 }
 
-// Init — load key, render cache
-(function init() {
-  if (localStorage.getItem('claudeKey')) document.getElementById('setupPanel').style.display = 'none';
-  const cN = cacheGet('nextrace'), cS = cacheGet('stories'), cQ = cacheGet('quali'), cSt = cacheGet('standings');
-  if (cN) renderNextRace(cN);
-  if (cS) renderStories(cS);
-  if (cQ) renderQuali(cQ);
-  if (cSt) renderStandings(cSt);
-  if (cN||cS||cQ||cSt) { const ts=localStorage.getItem('f1Ts'); if(ts) setTs(ts+' (cached)'); }
-})();
+// ── INIT ──────────────────────────────────────────────────────────────────────
+document.getElementById('keySaveBtn').addEventListener('click', saveKey);
+document.getElementById('keyInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') saveKey(); });
+document.getElementById('refreshBtn').addEventListener('click', refresh);
+document.getElementById('btnDrivers').addEventListener('click', function() { showTab('drivers'); });
+document.getElementById('btnConstructors').addEventListener('click', function() { showTab('constructors'); });
+
+if (localStorage.getItem('claudeKey')) document.getElementById('setupPanel').style.display = 'none';
+const cN = cacheGet('nextrace'), cS = cacheGet('stories'), cQ = cacheGet('quali'), cSt = cacheGet('standings');
+if (cN) renderNextRace(cN);
+if (cS) renderStories(cS);
+if (cQ) renderQuali(cQ);
+if (cSt) renderStandings(cSt);
+if (cN||cS||cQ||cSt) { const ts=localStorage.getItem('f1Ts'); if(ts) setTs(ts+' (cached)'); }
 </script>
 </body>
 </html>

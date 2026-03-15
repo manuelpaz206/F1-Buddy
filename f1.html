@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>F1 Dashboard</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="F1 Dashboard">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f0f0f">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+  :root {
+    --bg: #0f0f0f; --surface: #1a1a1a; --surface2: #242424; --border: #2e2e2e;
+    --text: #f0f0f0; --muted: #888; --accent: #e8003d;
+    --gold: #ffd700; --silver: #c0c0c0; --bronze: #cd7f32;
+    --mono: 'DM Mono', monospace; --sans: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; display: flex; flex-direction: column; align-items: center; -webkit-font-smoothing: antialiased; }
+  .app { width: 100%; max-width: 480px; min-height: 100vh; display: flex; flex-direction: column; padding: 0 0 40px; padding-bottom: max(40px, env(safe-area-inset-bottom)); }
+
+  .header { padding: 52px 24px 20px; border-bottom: 1px solid var(--border); }
+  .header-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em; color: var(--accent); text-transform: uppercase; margin-bottom: 8px; }
+  .header-title { font-size: 26px; font-weight: 300; letter-spacing: -0.5px; line-height: 1.2; }
+  .header-title strong { font-weight: 500; }
+  .last-updated { font-family: var(--mono); font-size: 10px; color: #444; margin-top: 10px; }
+  .last-updated.live { color: #3a7a3a; }
+
+  .setup-panel { margin: 20px 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .setup-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
+  .setup-row { display: flex; gap: 8px; }
+  .key-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text); font-family: var(--mono); font-size: 12px; outline: none; transition: border-color 0.15s; }
+  .key-input:focus { border-color: var(--accent); }
+  .key-input::placeholder { color: var(--muted); }
+  .key-save { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 16px; font-family: var(--mono); font-size: 11px; font-weight: 500; cursor: pointer; }
+  .key-save:hover { opacity: 0.85; }
+  .key-saved { font-family: var(--mono); font-size: 11px; color: #3a9a3a; padding: 6px 0 0; }
+
+  .refresh-area { padding: 20px 24px 0; }
+  .refresh-btn { width: 100%; background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 14px 20px; font-family: var(--mono); font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.15s, transform 0.1s; letter-spacing: 0.05em; }
+  .refresh-btn:hover { opacity: 0.88; }
+  .refresh-btn:active { transform: scale(0.98); }
+  .refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .progress-area { padding: 14px 24px 0; display: none; }
+  .progress-area.visible { display: block; }
+  .progress-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .progress-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); flex-shrink: 0; transition: background 0.3s; }
+  .progress-dot.loading { background: var(--accent); animation: pdot 0.8s ease-in-out infinite; }
+  .progress-dot.done { background: #3a7a3a; animation: none; }
+  .progress-dot.err { background: #7a2a2a; animation: none; }
+  .progress-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.08em; }
+  @keyframes pdot { 0%,100%{opacity:0.3} 50%{opacity:1} }
+
+  .error-msg { padding: 12px 16px; background: rgba(232,0,61,0.08); border: 1px solid rgba(232,0,61,0.2); border-radius: 8px; font-size: 13px; color: var(--accent); margin: 12px 24px 0; display: none; font-family: var(--mono); }
+  .error-msg.visible { display: block; }
+
+  .section { margin: 24px 24px 0; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .section-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em; color: var(--muted); text-transform: uppercase; }
+  .section-badge { font-family: var(--mono); font-size: 9px; color: #444; }
+
+  .story-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 8px; }
+  .story-card:last-child { margin-bottom: 0; }
+  .story-num { font-family: var(--mono); font-size: 9px; color: var(--accent); letter-spacing: 0.1em; margin-bottom: 6px; }
+  .story-headline { font-size: 14px; font-weight: 500; line-height: 1.4; margin-bottom: 5px; }
+  .story-body { font-size: 13px; color: #999; line-height: 1.55; }
+
+  .quali-table { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .quali-event { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .quali-event-name { font-size: 13px; font-weight: 500; }
+  .quali-event-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .quali-row { display: flex; align-items: center; padding: 10px 16px; border-bottom: 1px solid #1e1e1e; gap: 10px; }
+  .quali-row:last-child { border-bottom: none; }
+  .quali-pos { font-family: var(--mono); font-size: 13px; font-weight: 500; width: 20px; flex-shrink: 0; }
+  .p1{color:var(--gold)} .p2{color:var(--silver)} .p3{color:var(--bronze)} .pn{color:var(--muted)}
+  .team-bar { width: 3px; height: 32px; border-radius: 2px; flex-shrink: 0; }
+  .quali-driver { flex: 1; }
+  .quali-name { font-size: 13px; font-weight: 500; }
+  .quali-team { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .quali-time { font-family: var(--mono); font-size: 12px; text-align: right; }
+  .quali-gap { font-family: var(--mono); font-size: 10px; color: var(--muted); text-align: right; margin-top: 1px; }
+
+  .standings-toggle { display: flex; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 3px; gap: 3px; }
+  .toggle-btn { flex: 1; padding: 6px 0; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-align: center; cursor: pointer; border-radius: 6px; transition: all 0.15s; color: var(--muted); border: none; background: none; }
+  .toggle-btn.active { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .standings-table { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-top: 10px; }
+  .standings-row { display: flex; align-items: center; padding: 9px 16px; border-bottom: 1px solid #1e1e1e; gap: 10px; }
+  .standings-row:last-child { border-bottom: none; }
+  .standings-pos { font-family: var(--mono); font-size: 12px; width: 20px; flex-shrink: 0; }
+  .standings-name { flex: 1; font-size: 13px; }
+  .standings-name .sub { font-family: var(--mono); font-size: 10px; color: var(--muted); display: block; margin-top: 1px; }
+  .standings-pts { font-family: var(--mono); font-size: 13px; font-weight: 500; }
+  .standings-pts .lbl { font-size: 9px; color: var(--muted); font-weight: 400; }
+
+  .footer { padding: 28px 24px 0; font-family: var(--mono); font-size: 10px; color: #333; text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="header-label">Manuel's System</div>
+    <div class="header-title">Formula 1<br><strong>at a glance.</strong></div>
+    <div class="last-updated" id="lastUpdated">— never updated</div>
+  </div>
+
+  <div class="setup-panel" id="setupPanel">
+    <div class="setup-label">API Key (one-time setup)</div>
+    <div class="setup-row">
+      <input type="password" class="key-input" id="keyInput" placeholder="sk-ant-api03-..." />
+      <button class="key-save" onclick="saveKey()">Save</button>
+    </div>
+    <div class="key-saved" id="keySaved" style="display:none">✓ Key saved locally</div>
+  </div>
+
+  <div class="refresh-area">
+    <button class="refresh-btn" id="refreshBtn" onclick="refresh()">↻ &nbsp;UPDATE F1 DATA</button>
+  </div>
+
+  <div class="progress-area" id="progressArea">
+    <div class="progress-row"><div class="progress-dot" id="dot-stories"></div><div class="progress-label">TOP STORIES</div></div>
+    <div class="progress-row"><div class="progress-dot" id="dot-quali"></div><div class="progress-label">QUALIFYING RESULTS</div></div>
+    <div class="progress-row"><div class="progress-dot" id="dot-standings"></div><div class="progress-label">STANDINGS</div></div>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <div class="section" id="sec-stories" style="display:none">
+    <div class="section-header">
+      <div class="section-label">Top Stories</div>
+    </div>
+    <div id="stories-content"></div>
+  </div>
+
+  <div class="section" id="sec-quali" style="display:none">
+    <div class="section-header">
+      <div class="section-label">Latest Qualifying</div>
+      <div class="section-badge" id="badge-quali"></div>
+    </div>
+    <div id="quali-content"></div>
+  </div>
+
+  <div class="section" id="sec-standings" style="display:none">
+    <div class="section-header">
+      <div class="section-label">Standings</div>
+      <div class="standings-toggle">
+        <button class="toggle-btn active" id="btnDrivers" onclick="showTab('drivers')">DRIVERS</button>
+        <button class="toggle-btn" id="btnConstructors" onclick="showTab('constructors')">CONSTRUCTORS</button>
+      </div>
+    </div>
+    <div id="standings-content"></div>
+  </div>
+
+  <div class="footer">f1 dashboard · haiku · 6hr cache</div>
+</div>
+
+<script>
+const CACHE_TTL = 6 * 60 * 60 * 1000;
+const MODEL = 'claude-haiku-4-5-20251001';
+
+const TEAM_COLORS = {
+  'red bull':'#3671C6','ferrari':'#E8002D','mercedes':'#27F4D2',
+  'mclaren':'#FF8000','aston martin':'#229971','alpine':'#FF87BC',
+  'williams':'#64C4FF','haas':'#B6BABD','sauber':'#52E252',
+  'kick sauber':'#52E252','racing bulls':'#6692FF','visa cash':'#6692FF',
+};
+function tc(t) {
+  if (!t) return '#555';
+  const l = t.toLowerCase();
+  for (const [k,v] of Object.entries(TEAM_COLORS)) if (l.includes(k)) return v;
+  return '#666';
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+let activeTab = 'drivers';
+let cachedStandings = null;
+
+function saveKey() {
+  const v = document.getElementById('keyInput').value.trim();
+  if (!v) return;
+  localStorage.setItem('claudeKey', v);
+  document.getElementById('keyInput').value = '';
+  document.getElementById('keySaved').style.display = 'block';
+  setTimeout(() => document.getElementById('setupPanel').style.display = 'none', 800);
+}
+
+function cacheGet(key) {
+  try {
+    const raw = localStorage.getItem('f1_' + key);
+    if (!raw) return null;
+    const {ts, data} = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL) return null;
+    return data;
+  } catch { return null; }
+}
+function cacheSet(key, data) {
+  try { localStorage.setItem('f1_' + key, JSON.stringify({ts: Date.now(), data})); } catch {}
+}
+
+function dot(id, state) {
+  const el = document.getElementById('dot-' + id);
+  if (el) el.className = 'progress-dot ' + state;
+}
+
+async function callHaiku(apiKey, prompt) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 1000,
+      tools: [{type: 'web_search_20250305', name: 'web_search'}],
+      messages: [{role: 'user', content: prompt}]
+    })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || `API ${res.status}`);
+  const text = data.content?.filter(b => b.type==='text').map(b => b.text).join('');
+  const m = text.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+  if (!m) throw new Error('No JSON in response');
+  return JSON.parse(m[0]);
+}
+
+const P_STORIES = `Search web for the 3 most important F1 news stories from the past 7 days. Respond with ONLY a raw JSON array, no markdown, no explanation:
+[{"headline":"short title","body":"1-2 sentence summary"},{"headline":"...","body":"..."},{"headline":"...","body":"..."}]`;
+
+const P_QUALI = `Search web for the most recent F1 qualifying session results. Respond with ONLY a raw JSON object, no markdown:
+{"event":"2025 GP Name","date":"Mon DD YYYY","results":[{"pos":1,"driver":"Full Name","team":"Team","time":"1:26.720","gap":""},{"pos":2,"driver":"...","team":"...","time":"...","gap":"+0.234"},{"pos":3,"driver":"...","team":"...","time":"...","gap":"+0.456"},{"pos":4,"driver":"...","team":"...","time":"...","gap":"+0.678"},{"pos":5,"driver":"...","team":"...","time":"...","gap":"+0.900"},{"pos":6,"driver":"...","team":"...","time":"...","gap":"+1.123"},{"pos":7,"driver":"...","team":"...","time":"...","gap":"+1.345"},{"pos":8,"driver":"...","team":"...","time":"...","gap":"+1.567"},{"pos":9,"driver":"...","team":"...","time":"...","gap":"+1.789"},{"pos":10,"driver":"...","team":"...","time":"...","gap":"+2.012"}]}`;
+
+const P_STANDINGS = `Search web for current 2025 F1 championship standings. Respond with ONLY a raw JSON object, no markdown:
+{"drivers":[{"pos":1,"name":"Full Name","team":"Team","points":77},{"pos":2,"name":"...","team":"...","points":64},{"pos":3,"name":"...","team":"...","points":58},{"pos":4,"name":"...","team":"...","points":50},{"pos":5,"name":"...","team":"...","points":45},{"pos":6,"name":"...","team":"...","points":38},{"pos":7,"name":"...","team":"...","points":30},{"pos":8,"name":"...","team":"...","points":24},{"pos":9,"name":"...","team":"...","points":18},{"pos":10,"name":"...","team":"...","points":12}],"constructors":[{"pos":1,"name":"Team","points":134},{"pos":2,"name":"...","points":112},{"pos":3,"name":"...","points":98},{"pos":4,"name":"...","points":80},{"pos":5,"name":"...","points":65},{"pos":6,"name":"...","points":50},{"pos":7,"name":"...","points":35},{"pos":8,"name":"...","points":22},{"pos":9,"name":"...","points":12},{"pos":10,"name":"...","points":5}]}`;
+
+function renderStories(s) {
+  document.getElementById('stories-content').innerHTML = s.map((x,i) =>
+    `<div class="story-card">
+      <div class="story-num">STORY ${i+1} OF ${s.length}</div>
+      <div class="story-headline">${esc(x.headline)}</div>
+      <div class="story-body">${esc(x.body)}</div>
+    </div>`).join('');
+  document.getElementById('sec-stories').style.display = 'block';
+}
+
+function renderQuali(q) {
+  document.getElementById('badge-quali').textContent = q.date || '';
+  const rows = (q.results||[]).map(r => {
+    const pc = r.pos===1?'p1':r.pos===2?'p2':r.pos===3?'p3':'pn';
+    return `<div class="quali-row">
+      <div class="quali-pos ${pc}">${r.pos}</div>
+      <div class="team-bar" style="background:${tc(r.team)}"></div>
+      <div class="quali-driver">
+        <div class="quali-name">${esc(r.driver)}</div>
+        <div class="quali-team">${esc(r.team)}</div>
+      </div>
+      <div>
+        <div class="quali-time">${esc(r.time)}</div>
+        <div class="quali-gap">${r.pos===1?'POLE':esc(r.gap)}</div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('quali-content').innerHTML =
+    `<div class="quali-table">
+      <div class="quali-event">
+        <div class="quali-event-name">${esc(q.event||'—')}</div>
+        <div class="quali-event-sub">QUALIFYING RESULTS</div>
+      </div>${rows}
+    </div>`;
+  document.getElementById('sec-quali').style.display = 'block';
+}
+
+function renderStandings(s) {
+  cachedStandings = s;
+  activeTab === 'drivers' ? renderDrivers(s.drivers||[]) : renderConstructors(s.constructors||[]);
+  document.getElementById('sec-standings').style.display = 'block';
+}
+function renderDrivers(drivers) {
+  document.getElementById('standings-content').innerHTML = `<div class="standings-table">${
+    drivers.slice(0,10).map(d => {
+      const pc = d.pos===1?'p1':d.pos===2?'p2':d.pos===3?'p3':'pn';
+      return `<div class="standings-row">
+        <div class="standings-pos ${pc}">${d.pos}</div>
+        <div class="team-bar" style="background:${tc(d.team)};height:28px"></div>
+        <div class="standings-name">${esc(d.name)}<span class="sub">${esc(d.team)}</span></div>
+        <div class="standings-pts">${d.points}<span class="lbl"> pts</span></div>
+      </div>`;
+    }).join('')
+  }</div>`;
+}
+function renderConstructors(constructors) {
+  document.getElementById('standings-content').innerHTML = `<div class="standings-table">${
+    constructors.slice(0,10).map(c => {
+      const pc = c.pos===1?'p1':c.pos===2?'p2':c.pos===3?'p3':'pn';
+      return `<div class="standings-row">
+        <div class="standings-pos ${pc}">${c.pos}</div>
+        <div class="team-bar" style="background:${tc(c.name)};height:28px"></div>
+        <div class="standings-name">${esc(c.name)}</div>
+        <div class="standings-pts">${c.points}<span class="lbl"> pts</span></div>
+      </div>`;
+    }).join('')
+  }</div>`;
+}
+
+function showTab(tab) {
+  activeTab = tab;
+  document.getElementById('btnDrivers').className = 'toggle-btn' + (tab==='drivers'?' active':'');
+  document.getElementById('btnConstructors').className = 'toggle-btn' + (tab==='constructors'?' active':'');
+  if (cachedStandings) renderStandings(cachedStandings);
+}
+
+function showError(m) { const e=document.getElementById('errorMsg'); e.textContent=m; e.className='error-msg visible'; }
+function hideError() { document.getElementById('errorMsg').className='error-msg'; }
+
+function setTs(ts) {
+  const el = document.getElementById('lastUpdated');
+  el.textContent = 'updated ' + ts;
+  el.className = 'last-updated live';
+}
+
+async function refresh() {
+  const apiKey = localStorage.getItem('claudeKey');
+  if (!apiKey) { document.getElementById('setupPanel').style.display='block'; showError('Add your API key first.'); return; }
+  hideError();
+
+  // Serve fully from cache if all 3 fresh
+  const cS = cacheGet('stories'), cQ = cacheGet('quali'), cSt = cacheGet('standings');
+  if (cS && cQ && cSt) {
+    renderStories(cS); renderQuali(cQ); renderStandings(cSt);
+    const ts = localStorage.getItem('f1Ts');
+    if (ts) setTs(ts + ' (cached)');
+    return;
+  }
+
+  document.getElementById('refreshBtn').disabled = true;
+  document.getElementById('progressArea').className = 'progress-area visible';
+  if (!cS) dot('stories','loading'); else { dot('stories','done'); renderStories(cS); }
+  if (!cQ) dot('quali','loading');   else { dot('quali','done');   renderQuali(cQ); }
+  if (!cSt) dot('standings','loading'); else { dot('standings','done'); renderStandings(cSt); }
+
+  const results = await Promise.allSettled([
+    cS ? Promise.resolve(cS) : callHaiku(apiKey, P_STORIES).then(d => { cacheSet('stories',d); dot('stories','done'); renderStories(d); return d; }),
+    cQ ? Promise.resolve(cQ) : callHaiku(apiKey, P_QUALI).then(d => { cacheSet('quali',d);   dot('quali','done');   renderQuali(d);   return d; }),
+    cSt ? Promise.resolve(cSt) : callHaiku(apiKey, P_STANDINGS).then(d => { cacheSet('standings',d); dot('standings','done'); renderStandings(d); return d; }),
+  ]);
+
+  results.forEach((r,i) => { if (r.status==='rejected') dot(['stories','quali','standings'][i],'err'); });
+
+  const failed = results.filter(r=>r.status==='rejected');
+  if (failed.length) {
+    const msg = failed.map(r=>r.reason?.message).join(' · ');
+    if (msg.includes('401')) document.getElementById('setupPanel').style.display='block';
+    showError('Some sections failed: ' + msg);
+  }
+
+  const ts = new Date().toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  localStorage.setItem('f1Ts', ts);
+  setTs(ts);
+  document.getElementById('refreshBtn').disabled = false;
+  setTimeout(() => { document.getElementById('progressArea').className = 'progress-area'; }, 2000);
+}
+
+// Init — load key, render cache
+(function init() {
+  if (localStorage.getItem('claudeKey')) document.getElementById('setupPanel').style.display = 'none';
+  const cS = cacheGet('stories'), cQ = cacheGet('quali'), cSt = cacheGet('standings');
+  if (cS) renderStories(cS);
+  if (cQ) renderQuali(cQ);
+  if (cSt) renderStandings(cSt);
+  if (cS||cQ||cSt) { const ts=localStorage.getItem('f1Ts'); if(ts) setTs(ts+' (cached)'); }
+})();
+</script>
+</body>
+</html>

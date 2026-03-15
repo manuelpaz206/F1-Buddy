@@ -173,8 +173,10 @@
 </div>
 
 <script>
-const CACHE_TTL        = 6 * 60 * 60 * 1000; // 6 hours
-const CACHE_TTL_RACE   = 1 * 60 * 60 * 1000; // 1 hour for next race
+const CACHE_TTL        = 6 * 60 * 60 * 1000;
+const CACHE_TTL_RACE   = 1 * 60 * 60 * 1000;
+const HAIKU  = 'claude-haiku-4-5-20251001';
+const SONNET = 'claude-sonnet-4-20250514';
 
 const TEAM_COLORS = {
   'red bull':'#3671C6','ferrari':'#E8002D','mercedes':'#27F4D2',
@@ -383,26 +385,49 @@ async function refresh() {
   if (!cQ) dot('quali','loading');    else { dot('quali','done');    renderQuali(cQ); }
   if (!cSt) dot('standings','loading'); else { dot('standings','done'); renderStandings(cSt); }
 
-  // Haiku for small calls, Sonnet for quali (structured, longer output)
-  const HAIKU  = 'claude-haiku-4-5-20251001';
-  const SONNET = 'claude-sonnet-4-20250514';
+  // Sonnet for quali (parallel), Haiku calls run sequentially to avoid rate limits
+  const qualiPromise = cQ
+    ? Promise.resolve(cQ)
+    : callClaude(apiKey, SONNET, P_QUALI, 1500).then(d => { cacheSet('quali',d); dot('quali','done'); renderQuali(d); return d; });
 
-  const results = await Promise.allSettled([
-    cN  ? Promise.resolve(cN)  : callClaude(apiKey, HAIKU,  P_NEXTRACE,  256).then(d => { cacheSet('nextrace',d);  dot('nextrace','done');  renderNextRace(d);  return d; }),
-    cS  ? Promise.resolve(cS)  : callClaude(apiKey, HAIKU,  P_STORIES,   500).then(d => { cacheSet('stories',d);   dot('stories','done');   renderStories(d);   return d; }),
-    cQ  ? Promise.resolve(cQ)  : callClaude(apiKey, SONNET, P_QUALI,    1500).then(d => { cacheSet('quali',d);     dot('quali','done');     renderQuali(d);     return d; }),
-    cSt ? Promise.resolve(cSt) : callClaude(apiKey, HAIKU,  P_STANDINGS, 800).then(d => { cacheSet('standings',d); dot('standings','done'); renderStandings(d); return d; }),
-  ]);
+  async function runHaiku() {
+    const out = { nextrace: cN, stories: cS, standings: cSt };
+    const calls = [
+      { key:'nextrace', cached: cN, prompt: P_NEXTRACE, tokens: 256,  render: renderNextRace },
+      { key:'stories',  cached: cS, prompt: P_STORIES,  tokens: 500,  render: renderStories  },
+      { key:'standings',cached: cSt,prompt: P_STANDINGS, tokens: 800,  render: renderStandings},
+    ];
+    for (const c of calls) {
+      if (c.cached) { out[c.key] = c.cached; continue; }
+      try {
+        const d = await callClaude(apiKey, HAIKU, c.prompt, c.tokens);
+        cacheSet(c.key, d);
+        dot(c.key, 'done');
+        c.render(d);
+        out[c.key] = d;
+      } catch(e) {
+        dot(c.key, 'err');
+        out[c.key] = { error: e.message };
+      }
+    }
+    return out;
+  }
 
-  results.forEach((r,i) => { if (r.status==='rejected') dot(['nextrace','stories','quali','standings'][i],'err'); });
+  const [qualiResult, haikuResult] = await Promise.allSettled([qualiPromise, runHaiku()]);
 
-  const failed = results.filter(r => r.status==='rejected');
-  if (failed.length) {
-    const labels = ['nextrace','stories','quali','standings'];
-    const names  = results.map((r,i) => r.status==='rejected' ? labels[i] : null).filter(Boolean);
-    const msg    = failed.map(r => r.reason?.message).join(' · ');
-    if (msg.includes('401')) document.getElementById('setupPanel').style.display='block';
-    showError(`Failed (${names.join(', ')}): ${msg}`);
+  const errors = [];
+  if (qualiResult.status === 'rejected') { dot('quali','err'); errors.push(`quali: ${qualiResult.reason?.message}`); }
+  if (haikuResult.status === 'rejected') { errors.push(`haiku: ${haikuResult.reason?.message}`); }
+  else {
+    const h = haikuResult.value;
+    if (h.nextrace?.error)  { dot('nextrace','err');  errors.push(`nextrace: ${h.nextrace.error}`); }
+    if (h.stories?.error)   { dot('stories','err');   errors.push(`stories: ${h.stories.error}`); }
+    if (h.standings?.error) { dot('standings','err'); errors.push(`standings: ${h.standings.error}`); }
+  }
+
+  if (errors.length) {
+    if (errors.some(e => e.includes('401'))) document.getElementById('setupPanel').style.display='block';
+    showError('Failed: ' + errors.join(' · '));
   }
 
   const ts = new Date().toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});

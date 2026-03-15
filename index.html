@@ -259,8 +259,8 @@ const P_STORIES = `Search web for the 3 biggest F1 news stories this past week. 
 [{"headline":"...","body":"..."},{"headline":"...","body":"..."},{"headline":"...","body":"..."}]`;
 
 const P_QUALI = `Search web for the most recent F1 qualifying results. Reply with a JSON object only:
-{"event":"GP Name","date":"Mon DD YYYY","results":[{"pos":1,"driver":"Name","team":"Team","time":"1:26.720","gap":""},{"pos":2,"driver":"Name","team":"Team","time":"...","gap":"+0.234"}]}
-Include all top 10 finishers in results array.`;
+{"event":"GP Name","date":"Mon DD YYYY","results":[{"pos":1,"driver":"Name","team":"Team","time":"1:26.720","gap":""},{"pos":2,"driver":"Name","team":"Team","time":"1:26.954","gap":"+0.234"}]}
+Include all top 10 finishers. Keep driver names as firstname lastname, keep team names short.`;
 
 const P_STANDINGS = `Search web for current 2025 F1 standings. Reply with a JSON object only:
 {"drivers":[{"pos":1,"name":"Name","team":"Team","points":77}],"constructors":[{"pos":1,"name":"Team","points":134}]}
@@ -383,7 +383,7 @@ async function refresh() {
   const results = await Promise.allSettled([
     cN ? Promise.resolve(cN) : callHaiku(apiKey, P_NEXTRACE, 200, '{').then(d => { cacheSet('nextrace',d); dot('nextrace','done'); renderNextRace(d); return d; }),
     cS ? Promise.resolve(cS) : callHaiku(apiKey, P_STORIES, 400).then(d => { cacheSet('stories',d); dot('stories','done'); renderStories(d); return d; }),
-    cQ ? Promise.resolve(cQ) : callHaiku(apiKey, P_QUALI, 800).then(d => { cacheSet('quali',d);   dot('quali','done');   renderQuali(d);   return d; }),
+    cQ ? Promise.resolve(cQ) : callHaiku(apiKey, P_QUALI, 1000).then(d => { cacheSet('quali',d);   dot('quali','done');   renderQuali(d);   return d; }),
     cSt ? Promise.resolve(cSt) : callHaiku(apiKey, P_STANDINGS, 600).then(d => { cacheSet('standings',d); dot('standings','done'); renderStandings(d); return d; }),
   ]);
 

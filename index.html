@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>F1 Dashboard</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="F1 Dashboard">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="F1 Buddy">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0f0f0f">
 <link rel="manifest" href="manifest.json">
@@ -25,7 +25,7 @@
   .app { width: 100%; max-width: 480px; min-height: 100vh; display: flex; flex-direction: column; padding: 0 0 40px; padding-bottom: max(40px, env(safe-area-inset-bottom)); }
 
   /* NEXT RACE BANNER */
-  .next-race-banner { position: sticky; top: 0; z-index: 100; background: var(--accent); display: none; padding: 10px 20px; align-items: center; justify-content: space-between; gap: 10px; }
+  .next-race-banner { position: sticky; top: 0; z-index: 100; background: var(--accent); display: none; padding: 10px 20px; padding-top: max(10px, env(safe-area-inset-top)); align-items: center; justify-content: space-between; gap: 10px; }
   .next-race-banner.visible { display: flex; }
   .next-race-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.15em; color: rgba(255,255,255,0.65); text-transform: uppercase; flex-shrink: 0; }
   .next-race-name { font-family: var(--mono); font-size: 12px; font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -168,7 +168,7 @@
     <div id="standings-content"></div>
   </div>
 
-  <div class="footer">f1 dashboard · powered by claude</div>
+  <div class="footer">f1 buddy · powered by claude</div>
 </div>
 
 <script>
@@ -295,7 +295,7 @@ const P_STORIES = `Search for the 3 biggest F1 news stories from the past 7 days
 const P_QUALI = `Search for the most recent Formula 1 qualifying session results. Return all top 10 positions. JSON only:
 {"event":"GP Name","date":"Mon DD YYYY","results":[{"pos":1,"driver":"Firstname Lastname","team":"Team Name","time":"1:26.720","gap":""},{"pos":2,"driver":"...","team":"...","time":"...","gap":"+0.234"},{"pos":3,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":4,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":5,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":6,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":7,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":8,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":9,"driver":"...","team":"...","time":"...","gap":"..."},{"pos":10,"driver":"...","team":"...","time":"...","gap":"..."}]}`;
 
-const P_STANDINGS = `Search for the current 2025 F1 championship standings. Return top 10 drivers and top 10 constructors. JSON only:
+const P_STANDINGS = `Search for the current 2026 F1 championship standings. Return top 10 drivers and top 10 constructors. JSON only:
 {"drivers":[{"pos":1,"name":"...","team":"...","points":0},{"pos":2,"name":"...","team":"...","points":0},{"pos":3,"name":"...","team":"...","points":0},{"pos":4,"name":"...","team":"...","points":0},{"pos":5,"name":"...","team":"...","points":0},{"pos":6,"name":"...","team":"...","points":0},{"pos":7,"name":"...","team":"...","points":0},{"pos":8,"name":"...","team":"...","points":0},{"pos":9,"name":"...","team":"...","points":0},{"pos":10,"name":"...","team":"...","points":0}],"constructors":[{"pos":1,"name":"...","points":0},{"pos":2,"name":"...","points":0},{"pos":3,"name":"...","points":0},{"pos":4,"name":"...","points":0},{"pos":5,"name":"...","points":0},{"pos":6,"name":"...","points":0},{"pos":7,"name":"...","points":0},{"pos":8,"name":"...","points":0},{"pos":9,"name":"...","points":0},{"pos":10,"name":"...","points":0}]}`;
 
 // ── RENDER ─────────────────────────────────────────────────────────────────────
@@ -418,7 +418,6 @@ async function refresh() {
   // Next race — instant, no API needed
   const nextRace = getNextRace();
   if (nextRace) renderNextRace(nextRace);
-  dot('nextrace', 'done');
 
   // Sonnet for quali (parallel), Haiku calls run sequentially to avoid rate limits
   const qualiPromise = cQ
@@ -426,7 +425,7 @@ async function refresh() {
     : callClaude(apiKey, SONNET, P_QUALI, 1500).then(d => { cacheSet('quali',d); dot('quali','done'); renderQuali(d); return d; });
 
   async function runHaiku() {
-    const out = { nextrace: cN, stories: cS, standings: cSt };
+    const out = { stories: cS, standings: cSt };
     const calls = [
       { key:'stories',  cached: cS, prompt: P_STORIES,   tokens: 500, render: renderStories   },
       { key:'standings',cached: cSt,prompt: P_STANDINGS,  tokens: 800, render: renderStandings },
@@ -454,7 +453,6 @@ async function refresh() {
   if (haikuResult.status === 'rejected') { errors.push(`haiku: ${haikuResult.reason?.message}`); }
   else {
     const h = haikuResult.value;
-    if (h.nextrace?.error)  { dot('nextrace','err');  errors.push(`nextrace: ${h.nextrace.error}`); }
     if (h.stories?.error)   { dot('stories','err');   errors.push(`stories: ${h.stories.error}`); }
     if (h.standings?.error) { dot('standings','err'); errors.push(`standings: ${h.standings.error}`); }
   }

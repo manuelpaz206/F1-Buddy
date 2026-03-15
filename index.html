@@ -300,8 +300,10 @@ const P_STANDINGS = `Search for the current 2025 F1 championship standings. Retu
 
 // ── RENDER ─────────────────────────────────────────────────────────────────────
 function renderNextRace(d) {
-  document.getElementById('nextRaceName').textContent = d.name || '—';
-  document.getElementById('nextRaceTime').textContent = d.time_et ? d.date + ' · ' + d.time_et : d.date || '';
+  document.getElementById('nextRaceName').textContent = d.name.replace(' Grand Prix', ' GP') || '—';
+  const timeNoET = (d.time_et || '').replace(' ET', '');
+  const dateNoYear = (d.date || '').replace(/,?\s*\d{4}/, '');
+  document.getElementById('nextRaceTime').textContent = dateNoYear + ' · ' + timeNoET;
   document.getElementById('nextRaceBanner').className = 'next-race-banner visible';
 }
 

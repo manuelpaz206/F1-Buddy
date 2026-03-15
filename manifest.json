@@ -1,7 +1,7 @@
 {
-  "name": "F1 Dashboard",
-  "short_name": "F1",
-  "start_url": "/f1-dashboard/",
+  "name": "F1 Buddy",
+  "short_name": "F1 Buddy",
+  "start_url": "/F1-Buddy/",
   "display": "standalone",
   "background_color": "#0f0f0f",
   "theme_color": "#e8003d",

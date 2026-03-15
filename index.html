@@ -137,7 +137,6 @@
   </div>
 
   <div class="progress-area" id="progressArea">
-    <div class="progress-row"><div class="progress-dot" id="dot-nextrace"></div><div class="progress-label">NEXT RACE</div></div>
     <div class="progress-row"><div class="progress-dot" id="dot-stories"></div><div class="progress-label">TOP STORIES</div></div>
     <div class="progress-row"><div class="progress-dot" id="dot-quali"></div><div class="progress-label">QUALIFYING RESULTS</div></div>
     <div class="progress-row"><div class="progress-dot" id="dot-standings"></div><div class="progress-label">STANDINGS</div></div>
@@ -173,8 +172,7 @@
 </div>
 
 <script>
-const CACHE_TTL        = 6 * 60 * 60 * 1000;
-const CACHE_TTL_RACE   = 1 * 60 * 60 * 1000;
+const CACHE_TTL = 6 * 60 * 60 * 1000;
 const HAIKU  = 'claude-haiku-4-5-20251001';
 const SONNET = 'claude-sonnet-4-20250514';
 
@@ -254,10 +252,42 @@ async function callClaude(apiKey, model, prompt, maxTokens) {
 }
 
 // ── PROMPTS ────────────────────────────────────────────────────────────────────
-const today = new Date().toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'});
+// ── 2026 F1 CALENDAR (hardcoded) ──────────────────────────────────────────────
+const CALENDAR_2025 = [
+  { name: 'Chinese Grand Prix',          date: '2026-03-15', time_et: '3:00 AM ET'  },
+  { name: 'Japanese Grand Prix',         date: '2026-03-29', time_et: '1:00 AM ET'  },
+  { name: 'Bahrain Grand Prix',          date: '2026-04-12', time_et: '11:00 AM ET' },
+  { name: 'Saudi Arabian Grand Prix',    date: '2026-04-19', time_et: '1:00 PM ET'  },
+  { name: 'Miami Grand Prix',            date: '2026-05-03', time_et: '4:00 PM ET'  },
+  { name: 'Canadian Grand Prix',         date: '2026-05-24', time_et: '4:00 PM ET'  },
+  { name: 'Monaco Grand Prix',           date: '2026-06-07', time_et: '9:00 AM ET'  },
+  { name: 'Barcelona Grand Prix',        date: '2026-06-14', time_et: '9:00 AM ET'  },
+  { name: 'Austrian Grand Prix',         date: '2026-06-28', time_et: '9:00 AM ET'  },
+  { name: 'British Grand Prix',          date: '2026-07-05', time_et: '10:00 AM ET' },
+  { name: 'Belgian Grand Prix',          date: '2026-07-19', time_et: '9:00 AM ET'  },
+  { name: 'Hungarian Grand Prix',        date: '2026-07-26', time_et: '9:00 AM ET'  },
+  { name: 'Dutch Grand Prix',            date: '2026-08-23', time_et: '9:00 AM ET'  },
+  { name: 'Italian Grand Prix',          date: '2026-09-06', time_et: '9:00 AM ET'  },
+  { name: 'Spanish Grand Prix (Madrid)', date: '2026-09-13', time_et: '9:00 AM ET'  },
+  { name: 'Azerbaijan Grand Prix',       date: '2026-09-26', time_et: '7:00 AM ET'  },
+  { name: 'Singapore Grand Prix',        date: '2026-10-11', time_et: '8:00 AM ET'  },
+  { name: 'United States Grand Prix',    date: '2026-10-25', time_et: '4:00 PM ET'  },
+  { name: 'Mexico City Grand Prix',      date: '2026-11-01', time_et: '3:00 PM ET'  },
+  { name: 'São Paulo Grand Prix',        date: '2026-11-08', time_et: '12:00 PM ET' },
+  { name: 'Las Vegas Grand Prix',        date: '2026-11-21', time_et: '11:00 PM ET' },
+  { name: 'Qatar Grand Prix',            date: '2026-11-29', time_et: '11:00 AM ET' },
+  { name: 'Abu Dhabi Grand Prix',        date: '2026-12-06', time_et: '8:00 AM ET'  },
+];
 
-const P_NEXTRACE = `Today is ${today}. Search for the 2025 F1 race calendar. Return the next race that has not yet happened (strictly after today). JSON only:
-{"name":"GP Name","date":"Mon DD YYYY","time_et":"H:MM AM ET"}`;
+function getNextRace() {
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const next = CALENDAR_2025.find(r => r.date >= today);
+  if (!next) return null;
+  const d = new Date(next.date + 'T12:00:00');
+  const dateStr = d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+  return { name: next.name, date: dateStr, time_et: next.time_et };
+}
 
 const P_STORIES = `Search for the 3 biggest F1 news stories from the past 7 days. JSON array only:
 [{"headline":"...","body":"1-2 sentence summary"},{"headline":"...","body":"..."},{"headline":"...","body":"..."}]`;
@@ -365,14 +395,13 @@ async function refresh() {
   if (!apiKey) { document.getElementById('setupPanel').style.display='block'; showError('Add your API key first.'); return; }
   hideError();
 
-  const cN  = cacheGet('nextrace', CACHE_TTL_RACE);
   const cS  = cacheGet('stories');
   const cQ  = cacheGet('quali');
   const cSt = cacheGet('standings');
 
   // All cached — instant render
-  if (cN && cS && cQ && cSt) {
-    renderNextRace(cN); renderStories(cS); renderQuali(cQ); renderStandings(cSt);
+  if (cS && cQ && cSt) {
+    renderStories(cS); renderQuali(cQ); renderStandings(cSt);
     const ts = localStorage.getItem('f1Ts');
     if (ts) setTs(ts + ' (cached)');
     return;
@@ -380,10 +409,14 @@ async function refresh() {
 
   document.getElementById('refreshBtn').disabled = true;
   document.getElementById('progressArea').className = 'progress-area visible';
-  if (!cN) dot('nextrace','loading'); else { dot('nextrace','done'); renderNextRace(cN); }
   if (!cS) dot('stories','loading');  else { dot('stories','done');  renderStories(cS); }
   if (!cQ) dot('quali','loading');    else { dot('quali','done');    renderQuali(cQ); }
   if (!cSt) dot('standings','loading'); else { dot('standings','done'); renderStandings(cSt); }
+
+  // Next race — instant, no API needed
+  const nextRace = getNextRace();
+  if (nextRace) renderNextRace(nextRace);
+  dot('nextrace', 'done');
 
   // Sonnet for quali (parallel), Haiku calls run sequentially to avoid rate limits
   const qualiPromise = cQ
@@ -393,9 +426,8 @@ async function refresh() {
   async function runHaiku() {
     const out = { nextrace: cN, stories: cS, standings: cSt };
     const calls = [
-      { key:'nextrace', cached: cN, prompt: P_NEXTRACE, tokens: 256,  render: renderNextRace },
-      { key:'stories',  cached: cS, prompt: P_STORIES,  tokens: 500,  render: renderStories  },
-      { key:'standings',cached: cSt,prompt: P_STANDINGS, tokens: 800,  render: renderStandings},
+      { key:'stories',  cached: cS, prompt: P_STORIES,   tokens: 500, render: renderStories   },
+      { key:'standings',cached: cSt,prompt: P_STANDINGS,  tokens: 800, render: renderStandings },
     ];
     for (const c of calls) {
       if (c.cached) { out[c.key] = c.cached; continue; }
@@ -445,12 +477,13 @@ document.getElementById('btnDrivers').addEventListener('click', () => showTab('d
 document.getElementById('btnConstructors').addEventListener('click', () => showTab('constructors'));
 
 if (localStorage.getItem('claudeKey')) document.getElementById('setupPanel').style.display = 'none';
-const _cN = cacheGet('nextrace', CACHE_TTL_RACE), _cS = cacheGet('stories'), _cQ = cacheGet('quali'), _cSt = cacheGet('standings');
-if (_cN) renderNextRace(_cN);
+const nextRace = getNextRace();
+if (nextRace) renderNextRace(nextRace);
+const _cS = cacheGet('stories'), _cQ = cacheGet('quali'), _cSt = cacheGet('standings');
 if (_cS) renderStories(_cS);
 if (_cQ) renderQuali(_cQ);
 if (_cSt) renderStandings(_cSt);
-if (_cN||_cS||_cQ||_cSt) { const ts=localStorage.getItem('f1Ts'); if(ts) setTs(ts+' (cached)'); }
+if (_cS||_cQ||_cSt) { const ts=localStorage.getItem('f1Ts'); if(ts) setTs(ts+' (cached)'); }
 </script>
 </body>
 </html>
